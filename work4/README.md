@@ -1,4 +1,4 @@
-# 弹幕视频系统 - 后端服务说明
+# danmakuVideoWebApi
 
 ## 项目简介
 

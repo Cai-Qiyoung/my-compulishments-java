@@ -1,0 +1,72 @@
+danmaku-video-api/
+├── src/
+│   ├── main/
+│   │   ├── java/
+│   │   │   └── com/
+│   │   │       └── danmaku/
+│   │   │           ├── DanmakuVideoApiApplication.java  // 项目启动类
+│   │   │           ├── config/                         // 配置类
+│   │   │           │   ├── MybatisPlusConfig.java      // MybatisPlus配置
+│   │   │           │   ├── RedisConfig.java            // Redis配置
+│   │   │           │   ├── SecurityConfig.java         // SpringSecurity配置
+│   │   │           │   ├── WebMvcConfig.java           // 跨域等Web配置
+│   │   │           │   ├── JwtAuthenticationFilter.java
+│   │   │           │   └──  AsyncConfig.java            // 异步任务配置 
+│   │   │           ├── constant/                       // 常量类
+│   │   │           ├── controller/                     // 控制器层
+│   │   │           │   ├── UserController.java
+│   │   │           │   ├── VideoController.java
+│   │   │           │   ├── LikeController.java
+│   │   │           │   ├── CommentController.java
+│   │   │           │   └── RelationController.java
+│   │   │           ├── entity/                         // 实体类
+│   │   │           │   ├── User.java
+│   │   │           │   ├── Video.java
+│   │   │           │   ├── Like.java
+│   │   │           │   ├── Comment.java
+│   │   │           │   └── Relation.java
+│   │   │           ├── mapper/                         // Mapper层(MybatisPlus)
+│   │   │           │   ├── UserMapper.java
+│   │   │           │   ├── VideoMapper.java
+│   │   │           │   ├── LikeMapper.java
+│   │   │           │   ├── CommentMapper.java
+│   │   │           │   └── RelationMapper.java
+│   │   │           ├── service/                         // 服务层
+│   │   │           │   ├── impl/                       // 服务实现类
+│   │   │           │   │   ├── UserServiceImpl.java
+│   │   │           │   │   ├── VideoServiceImpl.java
+│   │   │           │   │   ├── LikeServiceImpl.java
+│   │   │           │   │   ├── CommentServiceImpl.java
+│   │   │           │   │   └── RelationServiceImpl.java
+│   │   │           │   ├── UserService.java
+│   │   │           │   ├── VideoService.java
+│   │   │           │   ├── LikeService.java
+│   │   │           │   ├── CommentService.java
+│   │   │           │   └── RelationService.java
+│   │   │           ├── util/                           // 工具类
+│   │   │           │   ├── JwtUtil.java                // JWT工具
+│   │   │           │   ├── FileUploadUtil.java         // 文件上传工具
+│   │   │           │   ├── RedisUtil.java              // Redis工具
+│   │   │           │   └── SnowFlakeUtil.java          // 雪花算法工具
+│   │   │           ├── vo/                             // 视图对象(返回结果)
+│   │   │           │   ├── ResultVo.java               // 统一返回结果
+│   │   │           │   ├── UserVo.java
+│   │   │           │   ├── VideoVo.java
+│   │   │           │   ├── CommentVo.java
+│   │   │           │   └── RelationVo.java
+│   │   │           └── exception/                      // 全局异常处理
+│   │   │               ├── GlobalExceptionHandler.java
+│   │   │               └── BusinessException.java
+│   │   └── resources/
+│   │       ├── application.yml                         // 主配置文件
+│   │       ├── application-dev.yml                     // 开发环境配置
+│   │       ├── mybatis/                                // Mybatis映射文件(可选)
+│   │       ├── mapper/
+│   │       ├── logbagk-spring.xml
+│   │       └── static/                                 // 静态资源
+│   └── test/
+│       └── java/                                       // 单元测试
+├── Dockerfile                                          // Docker构建文件
+├── docker-compose.yml                                  // Docker-compose配置
+└── pom.xml                                             // Maven依赖配置
+ 

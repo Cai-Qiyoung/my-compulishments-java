@@ -1,0 +1,23 @@
+services:
+  mysql:
+    image: docker.mirrors.ustc.edu.cn/library/mysql:8.0
+    container_name: mysql
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: danmaku
+
+  redis:
+    image: docker.mirrors.ustc.edu.cn/library/redis:latest
+    container_name: redis
+    restart: always
+
+  app:
+    build: .
+    container_name: springboot-app
+    ports:
+      - "10001:10001"
+    depends_on:
+      - mysql
+      - redis
+    restart: always

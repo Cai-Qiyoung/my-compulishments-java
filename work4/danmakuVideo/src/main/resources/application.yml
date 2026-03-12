@@ -1,0 +1,77 @@
+# 服务器配置
+server:
+  port: 10001
+  servlet:
+    context-path: /
+
+# Spring 核心配置
+spring:
+  # 环境配置
+  profiles:
+    active: dev
+
+  # 数据库配置
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://localhost:3306/danmaku_video?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
+    username: root
+    password: root
+    hikari:
+      maximum-pool-size: 15
+      minimum-idle: 5
+      idle-timeout: 30000
+
+  # Redis 配置
+  data:
+    redis:
+      host: redis
+      port: 6379
+      password:
+      database: 0
+      timeout: 10000
+      jedis:
+        pool:
+          max-active: 20
+          max-idle: 10
+          min-idle: 5
+          max-wait: -1
+
+  # 文件上传配置
+  servlet:
+    multipart:
+      enabled: true
+      max-file-size: 1000MB
+      max-request-size: 1000MB
+
+# MyBatis-Plus 配置
+mybatis-plus:
+  mapper-locations: classpath:mapper/*.xml
+  # 实体类别名包
+  type-aliases-package: com.danmaku.entity
+  configuration:
+    # 开启驼峰命名转换
+    map-underscore-to-camel-case: true
+    # 控制台打印SQL（开发环境）
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+  global-config:
+    db-config:
+      # 主键类型
+      id-type: assign_id
+      # 逻辑删除字段
+      logic-delete-field: deleted_at
+      logic-delete-value: now()
+      logic-not-delete-value: null
+
+# JWT 配置
+jwt:
+  secret: aa32f93c2e714d2891a7d1234abcdef56789abcdef0123456789
+  expire: 86400000
+  header: Access-Token
+
+# 日志配置
+logging:
+  config: classpath:logback-spring.xml
+  level:
+    com.danmaku: info
+    org.springframework: warn
+    com.baomidou.mybatisplus: warn

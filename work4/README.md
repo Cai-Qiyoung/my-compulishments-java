@@ -4,6 +4,26 @@
 
 本项目是一个基于 Spring Boot + MyBatis-Plus 构建的视频网站后端服务，核心实现了用户管理、视频投稿与热门排行、评论互动、点赞、用户关系（关注 / 粉丝 / 好友）等核心功能，提供完整的 RESTful API 接口，支持用户认证、分页查询、事务管理等企业级特性。
 
+## 系统整体技术架构
+
+本系统采用经典的分层架构设计，严格遵循 “控制器 - 服务 - 数据访问” 的分层思想，保证代码的高内聚低耦合：
+
+1. **表现层（Controller）**：负责接收前端请求、参数校验、返回统一响应结果，如`IndexController`（首页文章接口）、`ArticleController`（文章核心操作）、`UserController`（用户登录注册）等；
+
+2. **业务层（Service）**：封装核心业务逻辑，基于 MyBatis Plus 的`IService`和`ServiceImpl`实现通用 CRUD，同时扩展自定义业务方法；
+
+3. **数据访问层（Mapper）**：通过 MyBatis Plus 的`BaseMapper`简化数据库操作，结合`@Mapper`注解和`@MapperScan`实现接口扫描；
+
+4. **实体层（Entity/DTO/VO）**：
+
+   - Entity：与数据库表一一映射（如`ArticleInfo`、`SysUser`），通过 MyBatis Plus 注解指定表名、主键策略；
+   - DTO：封装前端传入的参数（如`LoginDTO`、`CommentDTO`），仅保留业务所需字段；
+   - VO：封装返回给前端的视图数据（如`ArticleVO`、`CommentVO`），适配前端展示需求；
+
+   
+
+5. **工具层（Util）**：提供 JWT 认证、统一响应结果等通用工具类，提升代码复用性。
+
 ## 技术栈
 
 ### 核心框架与工具

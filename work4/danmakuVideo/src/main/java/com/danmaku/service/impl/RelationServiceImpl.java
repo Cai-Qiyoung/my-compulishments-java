@@ -12,13 +12,11 @@ import com.danmaku.service.RelationService;
 import com.danmaku.util.JwtUtil;
 import com.danmaku.vo.ResultVo;
 import jakarta.annotation.Resource;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
@@ -64,7 +62,8 @@ public class RelationServiceImpl extends ServiceImpl<RelationMapper, Relation> i
         // 确定目标用户ID
         String targetUserId;
         if(userId==null){
-            targetUserId = String.valueOf(jwtUtil.getUserIdFromToken(accessToken));
+            Long currentUserId = (Long) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+            targetUserId = currentUserId.toString();
         }else {
             targetUserId = userId;
         }
@@ -75,14 +74,35 @@ public class RelationServiceImpl extends ServiceImpl<RelationMapper, Relation> i
                 .eq(Relation::getStatus, 0);
         IPage<Relation> relationPage = this.page(page, wrapper);
 
+        // 优化：批量查询用户信息（解决N+1）
+        List<Relation> relations = relationPage.getRecords();
+        if (relations.isEmpty()) {
+            Map<String, Object> data = new HashMap<>();
+            data.put("items", Collections.emptyList());
+            data.put("total", 0);
+            return ResultVo.success(data);
+        }
+
+        // 提取所有被关注用户ID
+        Set<String> toUserIds = relations.stream()
+                .map(Relation::getToUserId)
+                .collect(Collectors.toSet());
+        // 批量查询用户
+        List<User> users = userMapper.selectBatchIds(toUserIds);
+        // 构建用户ID -> 用户信息的Map
+        Map<String, User> userMap = users.stream()
+                .collect(Collectors.toMap(User::getId, user -> user));
+
         // 封装返回数据（用户ID、用户名、头像）
-        List<Map<String, Object>> items = relationPage.getRecords().stream()
+        List<Map<String, Object>> items = relations.stream()
                 .map(relation -> {
-                    User user = userMapper.selectById(relation.getToUserId());
+                    User user = userMap.get(relation.getToUserId());
                     Map<String, Object> item = new HashMap<>();
-                    item.put("id", user.getId().toString());
-                    item.put("username", user.getUsername());
-                    item.put("avatar_url", user.getAvatarUrl());
+                    if (user != null) {
+                        item.put("id", user.getId().toString());
+                        item.put("username", user.getUsername());
+                        item.put("avatar_url", user.getAvatarUrl());
+                    }
                     return item;
                 })
                 .collect(Collectors.toList());
@@ -100,7 +120,8 @@ public class RelationServiceImpl extends ServiceImpl<RelationMapper, Relation> i
         // 确定目标用户ID
         String targetUserId;
         if(userId==null){
-            targetUserId = String.valueOf(jwtUtil.getUserIdFromToken(accessToken));
+            Long currentUserId = (Long) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+            targetUserId = currentUserId.toString();
         }else {
             targetUserId = userId;
         }
@@ -111,14 +132,35 @@ public class RelationServiceImpl extends ServiceImpl<RelationMapper, Relation> i
                 .eq(Relation::getStatus, 0);
         IPage<Relation> relationPage = this.page(page, wrapper);
 
+        // 优化：批量查询用户信息（解决N+1）
+        List<Relation> relations = relationPage.getRecords();
+        if (relations.isEmpty()) {
+            Map<String, Object> data = new HashMap<>();
+            data.put("items", Collections.emptyList());
+            data.put("total", 0);
+            return ResultVo.success(data);
+        }
+
+        // 提取所有粉丝用户ID
+        Set<String> fromUserIds = relations.stream()
+                .map(Relation::getFromUserId)
+                .collect(Collectors.toSet());
+        // 批量查询用户
+        List<User> users = userMapper.selectBatchIds(fromUserIds);
+        // 构建用户ID -> 用户信息的Map
+        Map<String, User> userMap = users.stream()
+                .collect(Collectors.toMap(User::getId, user -> user));
+
         // 封装返回数据（用户ID、用户名、头像）
-        List<Map<String, Object>> items = relationPage.getRecords().stream()
+        List<Map<String, Object>> items = relations.stream()
                 .map(relation -> {
-                    User user = userMapper.selectById(relation.getFromUserId());
+                    User user = userMap.get(relation.getFromUserId());
                     Map<String, Object> item = new HashMap<>();
-                    item.put("id", user.getId().toString());
-                    item.put("username", user.getUsername());
-                    item.put("avatar_url", user.getAvatarUrl());
+                    if (user != null) {
+                        item.put("id", user.getId().toString());
+                        item.put("username", user.getUsername());
+                        item.put("avatar_url", user.getAvatarUrl());
+                    }
                     return item;
                 })
                 .collect(Collectors.toList());
@@ -137,36 +179,52 @@ public class RelationServiceImpl extends ServiceImpl<RelationMapper, Relation> i
             return ResultVo.fail("请先登录");
         }
 
-        // 2. 从 Token 解析用户ID（核心！）
-        Long currentUserId = jwtUtil.getUserIdFromToken(accessToken);
+        Long currentUserId = (Long) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
         if (currentUserId == null) {
             return ResultVo.fail("登录已过期");
         }
         String targetUserId = currentUserId.toString();
 
         Page<Relation> page = new Page<>(pageNum, pageSize);
-
         LambdaQueryWrapper<Relation> wrapper = new LambdaQueryWrapper<>();
         // 我关注的人
-        wrapper.eq(Relation::getFromUserId, targetUserId);
-        wrapper.eq(Relation::getStatus, 0);
+        wrapper.eq(Relation::getFromUserId, targetUserId)
+                .eq(Relation::getStatus, 0);
 
         IPage<Relation> relationPage = this.page(page, wrapper);
         List<Relation> followList = relationPage.getRecords();
 
+        if (followList.isEmpty()) {
+            Map<String, Object> data = new HashMap<>();
+            data.put("items", Collections.emptyList());
+            data.put("total", 0);
+            return ResultVo.success(data);
+        }
+
+        // 优化1：批量查询互相关注关系
+        Set<String> toUserIds = followList.stream()
+                .map(Relation::getToUserId)
+                .collect(Collectors.toSet());
+        // 批量查询对方是否关注我
+        LambdaQueryWrapper<Relation> mutualWrapper = new LambdaQueryWrapper<>();
+        mutualWrapper.eq(Relation::getStatus, 0)
+                .in(Relation::getFromUserId, toUserIds)
+                .eq(Relation::getToUserId, targetUserId);
+        List<Relation> mutualRelations = this.list(mutualWrapper);
+        Set<String> mutualUserIds = mutualRelations.stream()
+                .map(Relation::getFromUserId)
+                .collect(Collectors.toSet());
+
+        // 优化2：批量查询用户信息
+        List<User> users = userMapper.selectBatchIds(mutualUserIds);
+        Map<String, User> userMap = users.stream()
+                .collect(Collectors.toMap(User::getId, user -> user));
+
+        // 组装好友列表
         List<Map<String, Object>> friendList = new ArrayList<>();
-        for (Relation relation : followList) {
-            String toUserId = relation.getToUserId();
-
-            // 查询对方是否也关注了我 → 是就是好友
-            boolean isMutual = this.lambdaQuery()
-                    .eq(Relation::getFromUserId, toUserId)
-                    .eq(Relation::getToUserId, targetUserId)
-                    .eq(Relation::getStatus, 0)
-                    .exists();
-
-            if (isMutual) {
-                User user = userMapper.selectById(toUserId);
+        for (String mutualUserId : mutualUserIds) {
+            User user = userMap.get(mutualUserId);
+            if (user != null) {
                 Map<String, Object> item = new HashMap<>();
                 item.put("id", user.getId().toString());
                 item.put("username", user.getUsername());

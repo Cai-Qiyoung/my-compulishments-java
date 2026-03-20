@@ -11,15 +11,17 @@ import com.danmaku.mapper.LikeMapper;
 import com.danmaku.mapper.VideoMapper;
 import com.danmaku.service.LikeService;
 import com.danmaku.util.JwtUtil;
+import com.danmaku.util.RedisUtil;
 import com.danmaku.vo.ResultVo;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
 import jakarta.annotation.Resource;
 
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
+import java.util.stream.Collectors;
+
+import static com.danmaku.service.impl.VideoServiceImpl.REDIS_POPULAR;
 
 @Service
 public class LikeServiceImpl extends ServiceImpl<LikeMapper, Like> implements LikeService {
@@ -29,6 +31,8 @@ public class LikeServiceImpl extends ServiceImpl<LikeMapper, Like> implements Li
     private CommentMapper commentMapper;
     @Resource
     private JwtUtil jwtUtil;
+    @Resource
+    private RedisUtil redisUtil;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -49,6 +53,8 @@ public class LikeServiceImpl extends ServiceImpl<LikeMapper, Like> implements Li
             Video video = videoMapper.selectById(videoId);
             video.setLikeCount(video.getLikeCount() + 1);
             videoMapper.updateById(video);
+            incrVisitCount(videoId);
+
             return ResultVo.success("点赞成功");
         } else {
             // 取消点赞
@@ -97,11 +103,11 @@ public class LikeServiceImpl extends ServiceImpl<LikeMapper, Like> implements Li
                 // 传了user_id → 查看他人主页
                 targetUserId = userId;
             } else {
-                // 没传user_id → 从token解析自己的ID
+
                 if (accessToken == null || accessToken.isEmpty()) {
                     return ResultVo.fail("未登录且未指定用户ID");
                 }
-                Long currentUserId = jwtUtil.getUserIdFromToken(accessToken);
+                Long currentUserId = (Long) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
                 targetUserId = currentUserId.toString();
             }
 
@@ -112,12 +118,22 @@ public class LikeServiceImpl extends ServiceImpl<LikeMapper, Like> implements Li
             Page<Like> page = new Page<>(page_num, page_size);
             page(page, wrapper);
 
-            // 3. 根据视频ID 查询视频详情（并带上用户名）
+            // 3. 优化：批量查询视频信息（解决N+1）
             List<Like> likeList = page.getRecords();
-            for (Like like : likeList) {
-                Video video = videoMapper.selectById(like.getVideoId());
-                if (video != null) {
-                    like.setVideo(video); // 把视频信息塞进like里
+            if (!likeList.isEmpty()) {
+                // 提取所有视频ID
+                Set<String> videoIds = likeList.stream()
+                        .map(Like::getVideoId)
+                        .filter(Objects::nonNull)
+                        .collect(Collectors.toSet());
+                // 批量查询视频
+                List<Video> videos = videoMapper.selectBatchIds(videoIds);
+                Map<String, Video> videoMap = videos.stream()
+                        .collect(Collectors.toMap(Video::getId, video -> video));
+
+                // 批量设置视频信息
+                for (Like like : likeList) {
+                    like.setVideo(videoMap.get(like.getVideoId()));
                 }
             }
 
@@ -131,6 +147,15 @@ public class LikeServiceImpl extends ServiceImpl<LikeMapper, Like> implements Li
         } catch (Exception e) {
             e.printStackTrace();
             return ResultVo.fail("获取喜欢列表失败：" + e.getMessage());
+        }
+    }
+
+    public void incrVisitCount(String videoId) {
+        Video video = videoMapper.selectById(videoId);
+        if (video != null) {
+            video.setVisitCount(video.getVisitCount() + 1);
+            videoMapper.updateById(video);
+            redisUtil.getRedisTemplate().opsForZSet().incrementScore(REDIS_POPULAR, videoId, 1D);
         }
     }
 }

@@ -17,10 +17,10 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 @EnableWebSecurity
 public class SecurityConfig {
 
-    private final JwtUtil jwtUtil;
+    private final JwtAuthenticationFilter jwtAuthenticationFilter;
 
-    public SecurityConfig(JwtUtil jwtUtil) {
-        this.jwtUtil = jwtUtil;
+    public SecurityConfig(JwtAuthenticationFilter jwtAuthenticationFilter) {
+        this.jwtAuthenticationFilter = jwtAuthenticationFilter;
     }
 
     // 密码加密器
@@ -35,20 +35,23 @@ public class SecurityConfig {
         return config.getAuthenticationManager();
     }
 
-    // 安全过滤链（核心修复：替换 antMatchers → requestMatchers）
+    // 安全过滤链（核心修复：替换 antMatchers → requestMatchers，移除 .and()）
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
                 // 关闭跨域防护、CSRF
-                .cors().and().csrf().disable()
+                .cors(cors -> cors.disable())
+                .csrf(csrf -> csrf.disable())
                 // 无状态会话
-                .sessionManagement().sessionCreationPolicy(SessionCreationPolicy.STATELESS)
-                .and()
+                .sessionManagement(session -> session
+                        .sessionCreationPolicy(SessionCreationPolicy.STATELESS)
+                )
                 // 接口权限控制（新 API 写法）
                 .authorizeHttpRequests(auth -> auth
-                        // 放行公开接口：使用 requestMatchers 替代 antMatchers
+                        // 放行公开接口
                         .requestMatchers(
                                 "/user/register",
+                                "/user/refreshToken",
                                 "/user/login",
                                 "/video/feed/**",
                                 "/video/popular",
@@ -59,10 +62,13 @@ public class SecurityConfig {
                         ).permitAll()
                         // 其他接口需要认证
                         .anyRequest().authenticated()
+                )
+                // 添加 JWT 过滤器
+                .addFilterBefore(
+                        jwtAuthenticationFilter,
+                        UsernamePasswordAuthenticationFilter.class
                 );
 
-        // 添加 JWT 过滤器
-        http.addFilterBefore(new JwtAuthenticationFilter(jwtUtil), UsernamePasswordAuthenticationFilter.class);
         return http.build();
     }
 }

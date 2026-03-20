@@ -11,6 +11,7 @@ import com.danmaku.mapper.VideoMapper;
 import com.danmaku.service.CommentService;
 import com.danmaku.util.JwtUtil;
 import com.danmaku.vo.ResultVo;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -28,7 +29,7 @@ public class CommentServiceImpl extends ServiceImpl<CommentMapper, Comment> impl
     @Override
     @Transactional(rollbackFor = Exception.class)
     public ResultVo<?> publishComment(String accessToken, String videoId, String content, String parentId) {
-        Long userId = jwtUtil.getUserIdFromToken(accessToken);
+        Long userId = (Long) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
         Comment comment = new Comment();
         comment.setUserId(String.valueOf(userId));
         comment.setVideoId(videoId);
@@ -66,7 +67,7 @@ public class CommentServiceImpl extends ServiceImpl<CommentMapper, Comment> impl
     @Override
     @Transactional(rollbackFor = Exception.class)
     public ResultVo<?> deleteComment(String accessToken, String commentId) {
-        Long userId = jwtUtil.getUserIdFromToken(accessToken);
+        Long userId = (Long) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
         Comment comment = getById(commentId);
         if (comment == null) {
             return ResultVo.fail("评论不存在");

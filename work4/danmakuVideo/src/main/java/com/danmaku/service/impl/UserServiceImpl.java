@@ -8,6 +8,7 @@ import com.danmaku.service.UserService;
 import com.danmaku.util.FileUploadUtil;
 import com.danmaku.util.JwtUtil;
 import com.danmaku.vo.ResultVo;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
@@ -88,7 +89,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
 
     @Override
     public ResultVo<Map<String, Object>> getUserInfo(String accessToken) {
-        Long userId = jwtUtil.getUserIdFromToken(accessToken);
+        Long userId = (Long) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
         User user = userMapper.selectById(String.valueOf(userId));
         if (user == null) {
             return ResultVo.fail("用户不存在");
@@ -108,7 +109,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
 
     @Override
     public ResultVo<Map<String, Object>> uploadAvatar(String accessToken, MultipartFile file) {
-        Long userId = jwtUtil.getUserIdFromToken(accessToken);
+        Long userId = (Long) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
 
         // 校验文件
         if (file.isEmpty()) {

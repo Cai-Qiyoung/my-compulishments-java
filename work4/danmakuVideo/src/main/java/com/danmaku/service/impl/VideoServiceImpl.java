@@ -15,6 +15,7 @@ import com.danmaku.vo.ResultVo;
 import jakarta.annotation.Resource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.ZSetOperations;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -36,7 +37,7 @@ public class VideoServiceImpl extends ServiceImpl<VideoMapper, Video> implements
 
     @Resource
     private FileUploadUtil fileUploadUtil;
-    private static final String REDIS_POPULAR = "danmaku:video:popular";
+    static final String REDIS_POPULAR = "danmaku:video:popular";
     @Autowired
     private JwtUtil jwtUtil;
 
@@ -44,7 +45,7 @@ public class VideoServiceImpl extends ServiceImpl<VideoMapper, Video> implements
     @Override
     public ResultVo<?> publishVideo(String accessToken, MultipartFile videoFile, MultipartFile coverFile, String title, String description) {
         try {
-            Long userId = jwtUtil.getUserIdFromToken(accessToken);
+            Long userId = (Long) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
             String videoUrl = fileUploadUtil.uploadVideo(videoFile);
             String coverUrl = fileUploadUtil.uploadCover(coverFile);
 
@@ -79,7 +80,7 @@ public class VideoServiceImpl extends ServiceImpl<VideoMapper, Video> implements
                 if (accessToken == null || accessToken.isEmpty()) {
                     return ResultVo.fail("未登录且未指定用户ID");
                 }
-                Long currentUserId = jwtUtil.getUserIdFromToken(accessToken);
+                Long currentUserId = (Long) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
                 targetUserId = currentUserId.toString();
             }
 
@@ -91,12 +92,23 @@ public class VideoServiceImpl extends ServiceImpl<VideoMapper, Video> implements
             Page<Video> page = new Page<>(pageNum, pageSize);
             page(page, wrapper);
 
-            // 3. 给每个视频补全用户名
+            // 3. 优化：批量查询用户名（解决N+1）
             List<Video> records = page.getRecords();
-            for (Video video : records) {
-                User user = userMapper.selectById(video.getUserId());
-                if (user != null) {
-                    video.setUserId(user.getUsername());
+            if (!records.isEmpty()) {
+                // 提取所有用户ID（这里其实只有targetUserId，但保留批量逻辑适配扩展）
+                Set<String> userIds = records.stream()
+                        .map(Video::getUserId)
+                        .collect(Collectors.toSet());
+                List<User> users = userMapper.selectBatchIds(userIds);
+                Map<String, User> userMap = users.stream()
+                        .collect(Collectors.toMap(User::getId, user -> user));
+
+                // 批量补全用户名
+                for (Video video : records) {
+                    User user = userMap.get(video.getUserId());
+                    if (user != null) {
+                        video.setUserId(user.getUsername());
+                    }
                 }
             }
 
@@ -117,34 +129,54 @@ public class VideoServiceImpl extends ServiceImpl<VideoMapper, Video> implements
 
     @Override
     public ResultVo<Map<String, Object>> getPopularVideo(Integer pageNum, Integer pageSize) {
-        long start = (long) (pageNum - 1) * pageSize;
-        long end = start + pageSize - 1;
+        try {
+            // 1. 分页参数校验
+            if (pageNum == null || pageNum < 1) pageNum = 1;
+            if (pageSize == null || pageSize < 1) pageSize = 10;
 
-        Set<ZSetOperations.TypedTuple<Object>> tuples =
-                redisUtil.getRedisTemplate().opsForZSet().reverseRangeWithScores(REDIS_POPULAR, start, end);
+            long start = (long) (pageNum - 1) * pageSize;
+            long end = start + pageSize - 1;
 
-        if (tuples == null || tuples.isEmpty()) {
-            return ResultVo.success(Collections.emptyMap());
+            // 2. 从Redis获取热门视频ID
+            Set<ZSetOperations.TypedTuple<Object>> tuples =
+                    redisUtil.getRedisTemplate().opsForZSet().reverseRangeWithScores(REDIS_POPULAR, start, end);
+
+            if (tuples == null || tuples.isEmpty()) {
+                Map<String, Object> emptyMap = new HashMap<>();
+                emptyMap.put("items", Collections.emptyList());
+                emptyMap.put("total", 0L);
+                return ResultVo.success(emptyMap);
+            }
+
+            List<String> videoIds = tuples.stream()
+                    .map(ZSetOperations.TypedTuple::getValue)
+                    .filter(Objects::nonNull)
+                    .map(Object::toString)
+                    .collect(Collectors.toList());
+
+            // 3. 查询数据库（现在类型完全匹配）
+            List<Video> videos = videoMapper.selectBatchIds(videoIds);
+
+            // 4. 按Redis热度排序
+            videos.sort((v1, v2) -> {
+                Double s1 = redisUtil.getRedisTemplate().opsForZSet().score(REDIS_POPULAR, v1.getId());
+                Double s2 = redisUtil.getRedisTemplate().opsForZSet().score(REDIS_POPULAR, v2.getId());
+                return Double.compare(
+                        s2 != null ? s2 : 0D,
+                        s1 != null ? s1 : 0D
+                );
+            });
+
+            // 5. 封装结果
+            Map<String, Object> result = new HashMap<>();
+            result.put("items", videos);
+            result.put("total", redisUtil.getRedisTemplate().opsForZSet().zCard(REDIS_POPULAR));
+            return ResultVo.success(result);
+
+        } catch (Exception e) {
+            e.printStackTrace();
+            return ResultVo.fail("获取热门视频失败：" + e.getMessage());
         }
-
-        List<Object> ids = tuples.stream()
-                .map(ZSetOperations.TypedTuple::getValue)
-                .collect(Collectors.toList());
-
-        List<Video> list = videoMapper.selectBatchIds(ids);
-        list.sort((v1, v2) -> {
-            Double s1 = redisUtil.getRedisTemplate().opsForZSet().score(REDIS_POPULAR, v1.getId());
-            Double s2 = redisUtil.getRedisTemplate().opsForZSet().score(REDIS_POPULAR, v2.getId());
-            return Double.compare(
-                    s2 != null ? s2 : 0D,
-                    s1 != null ? s1 : 0D
-            );
-        });
-
-        Map<String, Object> map = new HashMap<>();
-        map.put("items", list);
-        map.put("total", list.size());
-        return ResultVo.success(map);
     }
 
     @Override
@@ -176,13 +208,4 @@ public class VideoServiceImpl extends ServiceImpl<VideoMapper, Video> implements
         return ResultVo.success(data);
     }
 
-
-    public void incrVisitCount(String videoId) {
-        Video video = videoMapper.selectById(videoId);
-        if (video != null) {
-            video.setVisitCount(video.getVisitCount() + 1);
-            videoMapper.updateById(video);
-            redisUtil.getRedisTemplate().opsForZSet().incrementScore(REDIS_POPULAR, videoId, 1D);
-        }
-    }
 }

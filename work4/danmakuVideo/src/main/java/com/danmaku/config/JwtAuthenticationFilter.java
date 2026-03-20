@@ -1,51 +1,70 @@
 package com.danmaku.config;
 
 import com.danmaku.util.JwtUtil;
-import io.jsonwebtoken.Claims;
+import jakarta.annotation.Resource;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
+import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
-import java.util.Collections;
+import java.util.ArrayList;
 
-/**
- * JWT认证过滤器，每次请求执行一次
- */
+@Component
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
-    private final JwtUtil jwtUtil;
 
-    public JwtAuthenticationFilter(JwtUtil jwtUtil) {
-        this.jwtUtil = jwtUtil;
-    }
+    @Resource
+    private JwtUtil jwtUtil;
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain) throws ServletException, IOException {
-        // 固定从 Access-Token 请求头拿 token（你项目统一规范）
-        String token = request.getHeader("Access-Token");
+        // 1. 获取请求头中的 AccessToken
+        String accessToken = request.getHeader("Access-Token");
+        String refreshToken = request.getHeader("Refresh-Token");
 
-        if (token != null && !token.isEmpty()) {
-            try {
-                // 直接用你现有可用的方法
-                Long userId = jwtUtil.getUserIdFromToken(token);
+        try {
+            // ====================== 情况1：有 AccessToken ======================
+            if (accessToken != null && !accessToken.isEmpty()) {
+                try {
+                    // 尝试解析
+                    Long userId = jwtUtil.getUserIdFromToken(accessToken);
 
-                if (userId != null) {
-                    UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
-                            userId.toString(), null, Collections.emptyList()
-                    );
-                    authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+                    // 解析成功 → 放入认证信息
+                    UsernamePasswordAuthenticationToken authentication =
+                            new UsernamePasswordAuthenticationToken(userId, null, new ArrayList<>());
                     SecurityContextHolder.getContext().setAuthentication(authentication);
+
+                } catch (Exception e) {
+                    // ====================== AccessToken 过期！自动刷新 ======================
+                    if (refreshToken != null && !refreshToken.isEmpty()) {
+                        // 校验 RefreshToken 是否有效
+                        if (jwtUtil.validateToken(refreshToken) && jwtUtil.isRefreshToken(refreshToken)) {
+                            // 刷新成功 → 生成新 AccessToken
+                            Long userId = jwtUtil.getUserIdFromToken(refreshToken);
+                            String newAccessToken = jwtUtil.generateAccessToken(userId);
+
+                            //新 token 放入响应头，返回给前端
+                            response.setHeader("Access-Token", newAccessToken);
+                            response.setHeader("Access-Control-Expose-Headers", "Access-Token");
+
+                            // 用新 token 继续认证
+                            UsernamePasswordAuthenticationToken authentication =
+                                    new UsernamePasswordAuthenticationToken(userId, null, new ArrayList<>());
+                            SecurityContextHolder.getContext().setAuthentication(authentication);
+                        }
+                    }
                 }
-            } catch (Exception e) {
-                // 无效token，不做处理，直接放行
             }
+
+        } catch (Exception e) {
+            // 异常不阻断
         }
 
+        // 放行
         filterChain.doFilter(request, response);
     }
 }

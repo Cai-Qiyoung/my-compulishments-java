@@ -2,7 +2,6 @@ package com.danmaku.controller;
 
 import com.danmaku.service.RelationService;
 import com.danmaku.vo.ResultVo;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
 import jakarta.annotation.Resource;
@@ -46,7 +45,7 @@ public class RelationController {
 
     @GetMapping("/friends/list")
     public ResultVo<?> getFriendList(
-            @RequestHeader(name = "Access_Token") String accessToken,
+            @RequestHeader(name = "Access-Token") String accessToken,
             @RequestParam(defaultValue = "0") Integer page_num,
             @RequestParam(defaultValue = "10") Integer page_size) {
 

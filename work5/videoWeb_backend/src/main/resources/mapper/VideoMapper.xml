@@ -1,0 +1,205 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.danmaku.mapper.VideoMapper">
+    <resultMap id="VideoResultMap" type="com.danmaku.entity.Video">
+        <id property="id" column="id"/>
+        <result property="userId" column="user_id"/>
+        <result property="videoUrl" column="video_url"/>
+        <result property="coverUrl" column="cover_url"/>
+        <result property="title" column="title"/>
+        <result property="description" column="description"/>
+        <result property="visitCount" column="visit_count"/>
+        <result property="likeCount" column="like_count"/>
+        <result property="commentCount" column="comment_count"/>
+        <result property="auditStatus" column="audit_status"/>
+        <result property="auditReason" column="audit_reason"/>
+        <result property="auditBy" column="audit_by"/>
+        <result property="auditAt" column="audit_at"/>
+        <result property="createdAt" column="created_at"/>
+        <result property="updatedAt" column="updated_at"/>
+        <result property="deletedAt" column="deleted_at"/>
+    </resultMap>
+
+    <sql id="BaseColumns">
+        id, user_id, video_url, cover_url, title, description,
+        visit_count, like_count, comment_count, audit_status, audit_reason, audit_by, audit_at,
+        created_at, updated_at, deleted_at
+    </sql>
+
+    <sql id="SearchFilter">
+        <if test="keywords != null and keywords != ''">
+            AND (
+                title LIKE CONCAT('%', #{keywords}, '%')
+                OR description LIKE CONCAT('%', #{keywords}, '%')
+                <if test="matchedUserIds != null and matchedUserIds.size() > 0">
+                    OR user_id IN
+                    <foreach collection="matchedUserIds" item="userId" open="(" separator="," close=")">
+                        #{userId}
+                    </foreach>
+                </if>
+            )
+        </if>
+    </sql>
+
+    <sql id="ApprovedFilter">
+        AND audit_status = 'APPROVED'
+    </sql>
+
+    <insert id="insert" parameterType="com.danmaku.entity.Video">
+        INSERT INTO `video` (
+            id, user_id, video_url, cover_url, title, description,
+            visit_count, like_count, comment_count, audit_status, audit_reason, audit_by, audit_at,
+            created_at, updated_at, deleted_at
+        ) VALUES (
+            #{id}, #{userId}, #{videoUrl}, #{coverUrl}, #{title}, #{description},
+            #{visitCount}, #{likeCount}, #{commentCount}, #{auditStatus}, #{auditReason}, #{auditBy}, #{auditAt},
+            #{createdAt}, #{updatedAt}, #{deletedAt}
+        )
+    </insert>
+
+    <select id="selectById" resultMap="VideoResultMap">
+        SELECT <include refid="BaseColumns"/>
+        FROM `video`
+        WHERE id = #{id}
+          AND deleted_at IS NULL
+          <include refid="ApprovedFilter"/>
+        LIMIT 1
+    </select>
+
+    <select id="selectAdminById" resultMap="VideoResultMap">
+        SELECT <include refid="BaseColumns"/>
+        FROM `video`
+        WHERE id = #{id}
+          AND deleted_at IS NULL
+        LIMIT 1
+    </select>
+
+    <select id="selectByIds" resultMap="VideoResultMap">
+        SELECT <include refid="BaseColumns"/>
+        FROM `video`
+        WHERE deleted_at IS NULL
+          <include refid="ApprovedFilter"/>
+          AND id IN
+        <foreach collection="ids" item="id" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </select>
+
+    <select id="countByUserId" resultType="long">
+        SELECT COUNT(1)
+        FROM `video`
+        WHERE user_id = #{userId}
+          AND deleted_at IS NULL
+          <if test="!includePending">
+              <include refid="ApprovedFilter"/>
+          </if>
+    </select>
+
+    <select id="selectByUserIdPage" resultMap="VideoResultMap">
+        SELECT <include refid="BaseColumns"/>
+        FROM `video`
+        WHERE user_id = #{userId}
+          AND deleted_at IS NULL
+          <if test="!includePending">
+              <include refid="ApprovedFilter"/>
+          </if>
+        ORDER BY created_at DESC, id DESC
+        LIMIT #{offset}, #{limit}
+    </select>
+
+    <select id="countPendingAuditVideos" resultType="long">
+        SELECT COUNT(1)
+        FROM `video`
+        WHERE deleted_at IS NULL
+          AND audit_status = 'PENDING'
+    </select>
+
+    <select id="selectPendingAuditVideos" resultMap="VideoResultMap">
+        SELECT <include refid="BaseColumns"/>
+        FROM `video`
+        WHERE deleted_at IS NULL
+          AND audit_status = 'PENDING'
+        ORDER BY created_at ASC, id ASC
+        LIMIT #{offset}, #{limit}
+    </select>
+
+    <update id="reviewVideo">
+        UPDATE `video`
+        SET audit_status = #{auditStatus},
+            audit_reason = #{auditReason},
+            audit_by = #{auditBy},
+            audit_at = NOW(),
+            updated_at = NOW()
+        WHERE id = #{videoId}
+          AND deleted_at IS NULL
+          AND audit_status = 'PENDING'
+    </update>
+
+    <select id="countSearchVideos" resultType="long">
+        SELECT COUNT(1)
+        FROM `video`
+        WHERE deleted_at IS NULL
+          <if test="auditStatus != null and auditStatus != ''">
+              AND audit_status = #{auditStatus}
+          </if>
+        <include refid="SearchFilter"/>
+    </select>
+
+    <select id="searchVideos" resultMap="VideoResultMap">
+        SELECT <include refid="BaseColumns"/>
+        FROM `video`
+        WHERE deleted_at IS NULL
+          <if test="auditStatus != null and auditStatus != ''">
+              AND audit_status = #{auditStatus}
+          </if>
+        <include refid="SearchFilter"/>
+        ORDER BY created_at DESC, id DESC
+        LIMIT #{offset}, #{limit}
+    </select>
+
+    <update id="incrementVisitCount">
+        UPDATE `video`
+        SET visit_count = visit_count + #{delta},
+            updated_at = NOW()
+        WHERE id = #{videoId}
+          AND deleted_at IS NULL
+    </update>
+
+    <update id="incrementLikeCount">
+        UPDATE `video`
+        SET like_count = like_count + #{delta},
+            updated_at = NOW()
+        WHERE id = #{videoId}
+          AND deleted_at IS NULL
+    </update>
+
+    <update id="adjustLikeCountSafely">
+        UPDATE `video`
+        SET like_count = CASE
+                             WHEN like_count + #{delta} &lt; 0 THEN 0
+                             ELSE like_count + #{delta}
+                         END,
+            updated_at = NOW()
+        WHERE id = #{videoId}
+          AND deleted_at IS NULL
+    </update>
+
+    <update id="incrementCommentCount">
+        UPDATE `video`
+        SET comment_count = comment_count + #{delta},
+            updated_at = NOW()
+        WHERE id = #{videoId}
+          AND deleted_at IS NULL
+    </update>
+
+    <update id="adjustCommentCountSafely">
+        UPDATE `video`
+        SET comment_count = CASE
+                                WHEN comment_count + #{delta} &lt; 0 THEN 0
+                                ELSE comment_count + #{delta}
+                            END,
+            updated_at = NOW()
+        WHERE id = #{videoId}
+          AND deleted_at IS NULL
+    </update>
+</mapper>

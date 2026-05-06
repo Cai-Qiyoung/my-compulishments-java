@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.danmaku.mapper.ContactBlockMapper">
+    <resultMap id="ContactBlockResultMap" type="com.danmaku.entity.ContactBlock">
+        <id property="id" column="id"/>
+        <result property="blockerUserId" column="blocker_user_id"/>
+        <result property="blockedUserId" column="blocked_user_id"/>
+        <result property="status" column="status"/>
+        <result property="createdAt" column="created_at"/>
+        <result property="updatedAt" column="updated_at"/>
+    </resultMap>
+
+    <select id="selectByUsers" resultMap="ContactBlockResultMap">
+        SELECT id, blocker_user_id, blocked_user_id, status, created_at, updated_at
+        FROM `contact_block`
+        WHERE blocker_user_id = #{blockerUserId}
+          AND blocked_user_id = #{blockedUserId}
+        LIMIT 1
+    </select>
+
+    <insert id="insert" parameterType="com.danmaku.entity.ContactBlock">
+        INSERT INTO `contact_block` (
+            id, blocker_user_id, blocked_user_id, status, created_at, updated_at
+        ) VALUES (
+            #{id}, #{blockerUserId}, #{blockedUserId}, #{status}, #{createdAt}, #{updatedAt}
+        )
+    </insert>
+
+    <update id="updateStatusById">
+        UPDATE `contact_block`
+        SET status = #{status},
+            updated_at = NOW()
+        WHERE id = #{id}
+    </update>
+
+    <select id="countActiveBetween" resultType="long">
+        SELECT COUNT(1)
+        FROM `contact_block`
+        WHERE status = 0
+          AND (
+              (blocker_user_id = #{leftUserId} AND blocked_user_id = #{rightUserId})
+              OR
+              (blocker_user_id = #{rightUserId} AND blocked_user_id = #{leftUserId})
+          )
+    </select>
+
+    <select id="selectActiveBlocks" resultMap="ContactBlockResultMap">
+        SELECT id, blocker_user_id, blocked_user_id, status, created_at, updated_at
+        FROM `contact_block`
+        WHERE status = 0
+          AND blocker_user_id IN
+        <foreach collection="userIds" item="userId" open="(" separator="," close=")">
+            #{userId}
+        </foreach>
+    </select>
+</mapper>

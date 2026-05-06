@@ -1,0 +1,123 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.danmaku.mapper.ConversationMapper">
+    <resultMap id="ConversationResultMap" type="com.danmaku.entity.Conversation">
+        <id property="id" column="id"/>
+        <result property="conversationType" column="conversation_type"/>
+        <result property="bizKey" column="biz_key"/>
+        <result property="name" column="name"/>
+        <result property="avatarUrl" column="avatar_url"/>
+        <result property="creatorId" column="creator_id"/>
+        <result property="lastMessage" column="last_message"/>
+        <result property="lastMessageType" column="last_message_type"/>
+        <result property="lastMessageTime" column="last_message_time"/>
+        <result property="createdAt" column="created_at"/>
+        <result property="updatedAt" column="updated_at"/>
+        <result property="deletedAt" column="deleted_at"/>
+    </resultMap>
+
+    <select id="selectById" resultMap="ConversationResultMap">
+        SELECT id, conversation_type, biz_key, name, avatar_url, creator_id,
+               last_message, last_message_type, last_message_time, created_at, updated_at, deleted_at
+        FROM `conversation`
+        WHERE id = #{id}
+          AND deleted_at IS NULL
+        LIMIT 1
+    </select>
+
+    <select id="selectByBizKey" resultMap="ConversationResultMap">
+        SELECT id, conversation_type, biz_key, name, avatar_url, creator_id,
+               last_message, last_message_type, last_message_time, created_at, updated_at, deleted_at
+        FROM `conversation`
+        WHERE biz_key = #{bizKey}
+          AND deleted_at IS NULL
+        LIMIT 1
+    </select>
+
+    <insert id="insert" parameterType="com.danmaku.entity.Conversation">
+        INSERT INTO `conversation` (
+            id, conversation_type, biz_key, name, avatar_url, creator_id,
+            last_message, last_message_type, last_message_time, created_at, updated_at, deleted_at
+        ) VALUES (
+            #{id}, #{conversationType}, #{bizKey}, #{name}, #{avatarUrl}, #{creatorId},
+            #{lastMessage}, #{lastMessageType}, #{lastMessageTime}, #{createdAt}, #{updatedAt}, #{deletedAt}
+        )
+    </insert>
+
+    <update id="updateLastMessage">
+        UPDATE `conversation`
+        SET last_message = #{lastMessage},
+            last_message_type = #{lastMessageType},
+            last_message_time = #{lastMessageTime},
+            updated_at = NOW()
+        WHERE id = #{conversationId}
+          AND deleted_at IS NULL
+    </update>
+
+    <select id="countUserSessions" resultType="long">
+        SELECT COUNT(1)
+        FROM `conversation_member` cm
+        INNER JOIN `conversation` c
+           ON c.id = cm.conversation_id
+          AND c.deleted_at IS NULL
+        WHERE cm.user_id = #{userId}
+          AND cm.status = 0
+    </select>
+
+    <select id="selectUserSessions" resultMap="SessionItemResultMap">
+        SELECT c.id AS conversation_id,
+               c.conversation_type,
+               CASE
+                   WHEN c.conversation_type = 'GROUP' THEN c.name
+                   ELSE target_user.username
+               END AS conversation_name,
+               CASE
+                   WHEN c.conversation_type = 'GROUP' THEN c.avatar_url
+                   ELSE target_user.avatar_url
+               END AS conversation_avatar,
+               CASE
+                   WHEN c.conversation_type = 'GROUP' THEN NULL
+                   ELSE target_user.id
+               END AS target_user_id,
+               c.last_message,
+               c.last_message_type,
+               c.last_message_time,
+               CASE
+                   WHEN c.conversation_type = 'GROUP' THEN FALSE
+                   WHEN cb.id IS NULL THEN FALSE
+                   ELSE TRUE
+               END AS blocked
+        FROM `conversation_member` cm
+        INNER JOIN `conversation` c
+           ON c.id = cm.conversation_id
+          AND c.deleted_at IS NULL
+        LEFT JOIN `conversation_member` other_cm
+           ON other_cm.conversation_id = c.id
+          AND other_cm.user_id != #{userId}
+          AND other_cm.status = 0
+          AND c.conversation_type = 'SINGLE'
+        LEFT JOIN `user` target_user
+           ON target_user.id = other_cm.user_id
+          AND target_user.deleted_at IS NULL
+        LEFT JOIN `contact_block` cb
+           ON cb.blocker_user_id = #{userId}
+          AND cb.blocked_user_id = target_user.id
+          AND cb.status = 0
+        WHERE cm.user_id = #{userId}
+          AND cm.status = 0
+        ORDER BY COALESCE(c.last_message_time, c.created_at) DESC, c.id DESC
+        LIMIT #{offset}, #{limit}
+    </select>
+
+    <resultMap id="SessionItemResultMap" type="com.danmaku.vo.SessionItemVO">
+        <id property="conversationId" column="conversation_id"/>
+        <result property="conversationType" column="conversation_type"/>
+        <result property="conversationName" column="conversation_name"/>
+        <result property="conversationAvatar" column="conversation_avatar"/>
+        <result property="targetUserId" column="target_user_id"/>
+        <result property="lastMessage" column="last_message"/>
+        <result property="lastMessageType" column="last_message_type"/>
+        <result property="lastMessageTime" column="last_message_time"/>
+        <result property="blocked" column="blocked"/>
+    </resultMap>
+</mapper>

@@ -1,0 +1,53 @@
+services:
+  redis:
+    image: docker.m.daocloud.io/library/redis:7-alpine
+    container_name: redis
+    restart: always
+    ports:
+      - "6379:6379"
+    volumes:
+      - ./data/redis:/data
+
+  rabbitmq:
+    image: docker.io/library/rabbitmq:3.13-management-alpine
+    container_name: rabbitmq
+    restart: always
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: danmaku
+      RABBITMQ_DEFAULT_PASS: "Danmaku@2026"
+    volumes:
+      - ./data/rabbitmq:/var/lib/rabbitmq
+
+  app:
+    image: danmakuvideoapi:1.0.0-amd64
+    container_name: danmakuvideoapi
+    ports:
+      - "9090:9090"
+    depends_on:
+      - redis
+      - rabbitmq
+    restart: always
+    environment:
+      TZ: Asia/Shanghai
+      JAVA_TOOL_OPTIONS: -Duser.timezone=Asia/Shanghai
+      SERVER_PORT: 9090
+      APP_BASE_URL: http://120.55.191.140:9090
+      DB_HOST: host.containers.internal
+      DB_PORT: 3306
+      DB_NAME: danmaku_video
+      DB_USERNAME: danmaku_app
+      DB_PASSWORD: "@Cqy123456"
+      REDIS_HOST: host.containers.internal
+      REDIS_PORT: 6379
+      REDIS_DATABASE: 0
+      RABBITMQ_HOST: host.containers.internal
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USERNAME: danmaku
+      RABBITMQ_PASSWORD: "Danmaku@2026"
+      RABBITMQ_VHOST: /
+    volumes:
+      - ./upload:/app/upload
+      - ./logs:/app/logs

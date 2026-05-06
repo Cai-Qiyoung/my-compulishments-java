@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.danmaku.mapper.UserMapper">
+    <resultMap id="UserResultMap" type="com.danmaku.entity.User">
+        <id property="id" column="id"/>
+        <result property="username" column="username"/>
+        <result property="password" column="password"/>
+        <result property="avatarUrl" column="avatar_url"/>
+        <result property="role" column="role"/>
+        <result property="createdAt" column="created_at"/>
+        <result property="updatedAt" column="updated_at"/>
+        <result property="deletedAt" column="deleted_at"/>
+    </resultMap>
+
+    <sql id="BaseColumns">
+        id, username, password, avatar_url, role, created_at, updated_at, deleted_at
+    </sql>
+
+    <select id="selectById" resultMap="UserResultMap">
+        SELECT <include refid="BaseColumns"/>
+        FROM `user`
+        WHERE id = #{id}
+          AND deleted_at IS NULL
+        LIMIT 1
+    </select>
+
+    <select id="selectByUsername" resultMap="UserResultMap">
+        SELECT <include refid="BaseColumns"/>
+        FROM `user`
+        WHERE username = #{username}
+          AND deleted_at IS NULL
+        LIMIT 1
+    </select>
+
+    <select id="selectByIds" resultMap="UserResultMap">
+        SELECT <include refid="BaseColumns"/>
+        FROM `user`
+        WHERE deleted_at IS NULL
+          AND id IN
+        <foreach collection="ids" item="id" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </select>
+
+    <select id="selectIdsByUsernameLike" resultType="string">
+        SELECT id
+        FROM `user`
+        WHERE deleted_at IS NULL
+          AND username LIKE CONCAT('%', #{keyword}, '%')
+    </select>
+
+    <select id="selectRoleById" resultType="string">
+        SELECT role
+        FROM `user`
+        WHERE id = #{id}
+          AND deleted_at IS NULL
+        LIMIT 1
+    </select>
+
+    <insert id="insert" parameterType="com.danmaku.entity.User">
+        INSERT INTO `user` (
+            id, username, password, avatar_url, role, created_at, updated_at, deleted_at
+        ) VALUES (
+            #{id}, #{username}, #{password}, #{avatarUrl}, #{role}, #{createdAt}, #{updatedAt}, #{deletedAt}
+        )
+    </insert>
+
+    <update id="updateAvatarById">
+        UPDATE `user`
+        SET avatar_url = #{avatarUrl},
+            updated_at = #{updatedAt}
+        WHERE id = #{id}
+          AND deleted_at IS NULL
+    </update>
+</mapper>

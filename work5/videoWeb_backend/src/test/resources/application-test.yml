@@ -1,0 +1,38 @@
+spring:
+  main:
+    allow-bean-definition-overriding: true
+  datasource:
+    driver-class-name: org.h2.Driver
+    url: jdbc:h2:mem:danmaku_video;MODE=MySQL;DB_CLOSE_DELAY=-1;DATABASE_TO_LOWER=TRUE;NON_KEYWORDS=USER,COMMENT
+    username: sa
+    password:
+  sql:
+    init:
+      mode: always
+  data:
+    redis:
+      host: localhost
+      port: 6379
+  rabbitmq:
+    listener:
+      simple:
+        auto-startup: false
+
+mybatis:
+  mapper-locations: classpath:mapper/*.xml
+  type-aliases-package: com.danmaku.entity
+  configuration:
+    map-underscore-to-camel-case: true
+
+jwt:
+  secret: aa32f93c2e714d2891a7d1234abcdef56789abcdef0123456789
+  access-expire: 3600000
+  refresh-expire: 604800000
+
+app:
+  base-url: http://localhost:9090
+
+logging:
+  level:
+    root: warn
+    com.danmaku: warn

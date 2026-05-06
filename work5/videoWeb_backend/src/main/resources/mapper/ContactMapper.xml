@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.danmaku.mapper.ContactMapper">
+    <resultMap id="ContactResultMap" type="com.danmaku.vo.ContactVO">
+        <id property="id" column="id"/>
+        <result property="username" column="username"/>
+        <result property="avatarUrl" column="avatar_url"/>
+        <result property="blocked" column="blocked"/>
+        <result property="conversationId" column="conversation_id"/>
+    </resultMap>
+
+    <select id="countContacts" resultType="long">
+        SELECT COUNT(1)
+        FROM `relation` r1
+        INNER JOIN `relation` r2
+           ON r2.from_user_id = r1.to_user_id
+          AND r2.to_user_id = r1.from_user_id
+          AND r2.status = 0
+        INNER JOIN `user` u
+           ON u.id = r1.to_user_id
+          AND u.deleted_at IS NULL
+        WHERE r1.from_user_id = #{userId}
+          AND r1.status = 0
+    </select>
+
+    <select id="selectContacts" resultMap="ContactResultMap">
+        SELECT u.id,
+               u.username,
+               u.avatar_url,
+               CASE WHEN cb.id IS NULL THEN FALSE ELSE TRUE END AS blocked,
+               single_conversation.conversation_id
+        FROM `relation` r1
+        INNER JOIN `relation` r2
+           ON r2.from_user_id = r1.to_user_id
+          AND r2.to_user_id = r1.from_user_id
+          AND r2.status = 0
+        INNER JOIN `user` u
+           ON u.id = r1.to_user_id
+          AND u.deleted_at IS NULL
+        LEFT JOIN `contact_block` cb
+           ON cb.blocker_user_id = #{userId}
+          AND cb.blocked_user_id = u.id
+          AND cb.status = 0
+        LEFT JOIN (
+            SELECT MIN(cm1.user_id) AS left_user_id,
+                   MAX(cm1.user_id) AS right_user_id,
+                   cm1.conversation_id
+            FROM `conversation_member` cm1
+            INNER JOIN `conversation_member` cm2
+               ON cm2.conversation_id = cm1.conversation_id
+              AND cm2.user_id != cm1.user_id
+              AND cm2.status = 0
+            INNER JOIN `conversation` c
+               ON c.id = cm1.conversation_id
+              AND c.deleted_at IS NULL
+              AND c.conversation_type = 'SINGLE'
+            WHERE cm1.status = 0
+            GROUP BY cm1.conversation_id
+        ) single_conversation
+           ON single_conversation.left_user_id = CASE WHEN #{userId} &lt; u.id THEN #{userId} ELSE u.id END
+          AND single_conversation.right_user_id = CASE WHEN #{userId} &lt; u.id THEN u.id ELSE #{userId} END
+        WHERE r1.from_user_id = #{userId}
+          AND r1.status = 0
+        ORDER BY r1.id DESC
+        LIMIT #{offset}, #{limit}
+    </select>
+
+    <select id="countBlockedContacts" resultType="long">
+        SELECT COUNT(1)
+        FROM `contact_block` cb
+        INNER JOIN `user` u
+           ON u.id = cb.blocked_user_id
+          AND u.deleted_at IS NULL
+        WHERE cb.blocker_user_id = #{userId}
+          AND cb.status = 0
+    </select>
+
+    <select id="selectBlockedContacts" resultMap="ContactResultMap">
+        SELECT u.id,
+               u.username,
+               u.avatar_url,
+               TRUE AS blocked,
+               NULL AS conversation_id
+        FROM `contact_block` cb
+        INNER JOIN `user` u
+           ON u.id = cb.blocked_user_id
+          AND u.deleted_at IS NULL
+        WHERE cb.blocker_user_id = #{userId}
+          AND cb.status = 0
+        ORDER BY cb.updated_at DESC, cb.id DESC
+        LIMIT #{offset}, #{limit}
+    </select>
+</mapper>

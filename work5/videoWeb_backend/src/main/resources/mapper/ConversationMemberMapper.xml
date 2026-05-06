@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.danmaku.mapper.ConversationMemberMapper">
+    <resultMap id="ConversationMemberResultMap" type="com.danmaku.entity.ConversationMember">
+        <id property="id" column="id"/>
+        <result property="conversationId" column="conversation_id"/>
+        <result property="userId" column="user_id"/>
+        <result property="memberRole" column="member_role"/>
+        <result property="status" column="status"/>
+        <result property="joinedAt" column="joined_at"/>
+        <result property="updatedAt" column="updated_at"/>
+    </resultMap>
+
+    <insert id="insertBatch">
+        INSERT INTO `conversation_member` (
+            id, conversation_id, user_id, member_role, status, joined_at, updated_at
+        ) VALUES
+        <foreach collection="members" item="member" separator=",">
+            (
+                #{member.id}, #{member.conversationId}, #{member.userId}, #{member.memberRole},
+                #{member.status}, #{member.joinedAt}, #{member.updatedAt}
+            )
+        </foreach>
+    </insert>
+
+    <select id="selectByConversationId" resultMap="ConversationMemberResultMap">
+        SELECT id, conversation_id, user_id, member_role, status, joined_at, updated_at
+        FROM `conversation_member`
+        WHERE conversation_id = #{conversationId}
+          AND status = 0
+        ORDER BY joined_at ASC, id ASC
+    </select>
+
+    <select id="selectByConversationIdAndUserId" resultMap="ConversationMemberResultMap">
+        SELECT id, conversation_id, user_id, member_role, status, joined_at, updated_at
+        FROM `conversation_member`
+        WHERE conversation_id = #{conversationId}
+          AND user_id = #{userId}
+          AND status = 0
+        LIMIT 1
+    </select>
+
+    <select id="selectUserIdsByConversationId" resultType="string">
+        SELECT user_id
+        FROM `conversation_member`
+        WHERE conversation_id = #{conversationId}
+          AND status = 0
+    </select>
+
+    <select id="selectSharedConversationIds" resultType="string">
+        SELECT cm1.conversation_id
+        FROM `conversation_member` cm1
+        INNER JOIN `conversation_member` cm2
+           ON cm2.conversation_id = cm1.conversation_id
+          AND cm2.user_id = #{rightUserId}
+          AND cm2.status = 0
+        INNER JOIN `conversation` c
+           ON c.id = cm1.conversation_id
+          AND c.deleted_at IS NULL
+          AND c.conversation_type = 'SINGLE'
+        WHERE cm1.user_id = #{leftUserId}
+          AND cm1.status = 0
+    </select>
+</mapper>

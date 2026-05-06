@@ -1,0 +1,100 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.danmaku.mapper.LikeMapper">
+    <resultMap id="LikeResultMap" type="com.danmaku.entity.Like">
+        <id property="id" column="id"/>
+        <result property="userId" column="user_id"/>
+        <result property="videoId" column="video_id"/>
+        <result property="commentId" column="comment_id"/>
+        <result property="type" column="type"/>
+    </resultMap>
+
+    <resultMap id="LikeWithVideoResultMap" type="com.danmaku.entity.Like" extends="LikeResultMap">
+        <association property="video" javaType="com.danmaku.entity.Video" columnPrefix="v_">
+            <id property="id" column="id"/>
+            <result property="userId" column="user_id"/>
+            <result property="videoUrl" column="video_url"/>
+            <result property="coverUrl" column="cover_url"/>
+            <result property="title" column="title"/>
+            <result property="description" column="description"/>
+            <result property="visitCount" column="visit_count"/>
+            <result property="likeCount" column="like_count"/>
+            <result property="commentCount" column="comment_count"/>
+            <result property="createdAt" column="created_at"/>
+            <result property="updatedAt" column="updated_at"/>
+            <result property="deletedAt" column="deleted_at"/>
+        </association>
+    </resultMap>
+
+    <select id="selectVideoLike" resultMap="LikeResultMap">
+        SELECT id, user_id, video_id, comment_id, type
+        FROM `like_record`
+        WHERE user_id = #{userId}
+          AND video_id = #{videoId}
+          AND type = #{type}
+        LIMIT 1
+    </select>
+
+    <select id="selectCommentLike" resultMap="LikeResultMap">
+        SELECT id, user_id, video_id, comment_id, type
+        FROM `like_record`
+        WHERE user_id = #{userId}
+          AND comment_id = #{commentId}
+          AND type = #{type}
+        LIMIT 1
+    </select>
+
+    <select id="countVideoLikeByUser" resultType="long">
+        SELECT COUNT(1)
+        FROM `like_record`
+        WHERE user_id = #{userId}
+          AND video_id = #{videoId}
+          AND type = #{type}
+    </select>
+
+    <select id="countByUserId" resultType="long">
+        SELECT COUNT(1)
+        FROM `like_record`
+        WHERE user_id = #{userId}
+    </select>
+
+    <select id="selectByUserPageWithVideo" resultMap="LikeWithVideoResultMap">
+        SELECT lr.id,
+               lr.user_id,
+               lr.video_id,
+               lr.comment_id,
+               lr.type,
+               v.id AS v_id,
+               v.user_id AS v_user_id,
+               v.video_url AS v_video_url,
+               v.cover_url AS v_cover_url,
+               v.title AS v_title,
+               v.description AS v_description,
+               v.visit_count AS v_visit_count,
+               v.like_count AS v_like_count,
+               v.comment_count AS v_comment_count,
+               v.created_at AS v_created_at,
+               v.updated_at AS v_updated_at,
+               v.deleted_at AS v_deleted_at
+        FROM `like_record` lr
+        LEFT JOIN `video` v
+          ON lr.video_id = v.id
+         AND v.deleted_at IS NULL
+        WHERE lr.user_id = #{userId}
+        ORDER BY lr.id DESC
+        LIMIT #{offset}, #{limit}
+    </select>
+
+    <insert id="insert" parameterType="com.danmaku.entity.Like">
+        INSERT INTO `like_record` (
+            id, user_id, video_id, comment_id, type
+        ) VALUES (
+            #{id}, #{userId}, #{videoId}, #{commentId}, #{type}
+        )
+    </insert>
+
+    <delete id="deleteById">
+        DELETE FROM `like_record`
+        WHERE id = #{id}
+    </delete>
+</mapper>

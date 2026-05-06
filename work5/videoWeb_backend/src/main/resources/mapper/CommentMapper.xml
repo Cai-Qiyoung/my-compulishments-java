@@ -1,0 +1,112 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.danmaku.mapper.CommentMapper">
+    <resultMap id="CommentResultMap" type="com.danmaku.entity.Comment">
+        <id property="id" column="id"/>
+        <result property="userId" column="user_id"/>
+        <result property="videoId" column="video_id"/>
+        <result property="parentId" column="parent_id"/>
+        <result property="likeCount" column="like_count"/>
+        <result property="childCount" column="child_count"/>
+        <result property="content" column="content"/>
+        <result property="createdAt" column="created_at"/>
+        <result property="updatedAt" column="updated_at"/>
+        <result property="deletedAt" column="deleted_at"/>
+    </resultMap>
+
+    <sql id="BaseColumns">
+        id, user_id, video_id, parent_id, like_count, child_count,
+        content, created_at, updated_at, deleted_at
+    </sql>
+
+    <select id="selectById" resultMap="CommentResultMap">
+        SELECT <include refid="BaseColumns"/>
+        FROM `comment`
+        WHERE id = #{id}
+          AND deleted_at IS NULL
+        LIMIT 1
+    </select>
+
+    <insert id="insert" parameterType="com.danmaku.entity.Comment">
+        INSERT INTO `comment` (
+            id, user_id, video_id, parent_id, like_count, child_count,
+            content, created_at, updated_at, deleted_at
+        ) VALUES (
+            #{id}, #{userId}, #{videoId}, #{parentId}, #{likeCount}, #{childCount},
+            #{content}, #{createdAt}, #{updatedAt}, #{deletedAt}
+        )
+    </insert>
+
+    <select id="countRootComments" resultType="long">
+        SELECT COUNT(1)
+        FROM `comment`
+        WHERE video_id = #{videoId}
+          AND parent_id = '0'
+          AND deleted_at IS NULL
+    </select>
+
+    <select id="selectRootCommentsPage" resultMap="CommentResultMap">
+        SELECT <include refid="BaseColumns"/>
+        FROM `comment`
+        WHERE video_id = #{videoId}
+          AND parent_id = '0'
+          AND deleted_at IS NULL
+        ORDER BY created_at DESC, id DESC
+        LIMIT #{offset}, #{limit}
+    </select>
+
+    <select id="countByParentId" resultType="long">
+        SELECT COUNT(1)
+        FROM `comment`
+        WHERE parent_id = #{parentId}
+          AND deleted_at IS NULL
+    </select>
+
+    <delete id="deleteById">
+        DELETE FROM `comment`
+        WHERE id = #{id}
+    </delete>
+
+    <delete id="deleteByParentId">
+        DELETE FROM `comment`
+        WHERE parent_id = #{parentId}
+    </delete>
+
+    <update id="incrementLikeCount">
+        UPDATE `comment`
+        SET like_count = like_count + #{delta},
+            updated_at = NOW()
+        WHERE id = #{commentId}
+          AND deleted_at IS NULL
+    </update>
+
+    <update id="adjustLikeCountSafely">
+        UPDATE `comment`
+        SET like_count = CASE
+                             WHEN like_count + #{delta} &lt; 0 THEN 0
+                             ELSE like_count + #{delta}
+                         END,
+            updated_at = NOW()
+        WHERE id = #{commentId}
+          AND deleted_at IS NULL
+    </update>
+
+    <update id="incrementChildCount">
+        UPDATE `comment`
+        SET child_count = child_count + #{delta},
+            updated_at = NOW()
+        WHERE id = #{commentId}
+          AND deleted_at IS NULL
+    </update>
+
+    <update id="adjustChildCountSafely">
+        UPDATE `comment`
+        SET child_count = CASE
+                              WHEN child_count + #{delta} &lt; 0 THEN 0
+                              ELSE child_count + #{delta}
+                          END,
+            updated_at = NOW()
+        WHERE id = #{commentId}
+          AND deleted_at IS NULL
+    </update>
+</mapper>

@@ -1,0 +1,124 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.danmaku.mapper.RelationMapper">
+    <resultMap id="RelationResultMap" type="com.danmaku.entity.Relation">
+        <id property="id" column="id"/>
+        <result property="fromUserId" column="from_user_id"/>
+        <result property="toUserId" column="to_user_id"/>
+        <result property="status" column="status"/>
+    </resultMap>
+
+    <resultMap id="UserSummaryResultMap" type="com.danmaku.entity.User">
+        <id property="id" column="id"/>
+        <result property="username" column="username"/>
+        <result property="avatarUrl" column="avatar_url"/>
+    </resultMap>
+
+    <select id="selectByUsers" resultMap="RelationResultMap">
+        SELECT id, from_user_id, to_user_id, status
+        FROM `relation`
+        WHERE from_user_id = #{fromUserId}
+          AND to_user_id = #{toUserId}
+        LIMIT 1
+    </select>
+
+    <insert id="insert" parameterType="com.danmaku.entity.Relation">
+        INSERT INTO `relation` (
+            id, from_user_id, to_user_id, status
+        ) VALUES (
+            #{id}, #{fromUserId}, #{toUserId}, #{status}
+        )
+    </insert>
+
+    <update id="updateStatusById">
+        UPDATE `relation`
+        SET status = #{status}
+        WHERE id = #{id}
+    </update>
+
+    <select id="countFollowUsers" resultType="long">
+        SELECT COUNT(1)
+        FROM `relation` r
+        INNER JOIN `user` u
+           ON u.id = r.to_user_id
+          AND u.deleted_at IS NULL
+        WHERE r.from_user_id = #{userId}
+          AND r.status = 0
+    </select>
+
+    <select id="selectFollowUsers" resultMap="UserSummaryResultMap">
+        SELECT u.id, u.username, u.avatar_url
+        FROM `relation` r
+        INNER JOIN `user` u
+           ON u.id = r.to_user_id
+          AND u.deleted_at IS NULL
+        WHERE r.from_user_id = #{userId}
+          AND r.status = 0
+        ORDER BY r.id DESC
+        LIMIT #{offset}, #{limit}
+    </select>
+
+    <select id="countFansUsers" resultType="long">
+        SELECT COUNT(1)
+        FROM `relation` r
+        INNER JOIN `user` u
+           ON u.id = r.from_user_id
+          AND u.deleted_at IS NULL
+        WHERE r.to_user_id = #{userId}
+          AND r.status = 0
+    </select>
+
+    <select id="selectFansUsers" resultMap="UserSummaryResultMap">
+        SELECT u.id, u.username, u.avatar_url
+        FROM `relation` r
+        INNER JOIN `user` u
+           ON u.id = r.from_user_id
+          AND u.deleted_at IS NULL
+        WHERE r.to_user_id = #{userId}
+          AND r.status = 0
+        ORDER BY r.id DESC
+        LIMIT #{offset}, #{limit}
+    </select>
+
+    <select id="countFriendUsers" resultType="long">
+        SELECT COUNT(1)
+        FROM `relation` r1
+        INNER JOIN `relation` r2
+           ON r2.from_user_id = r1.to_user_id
+          AND r2.to_user_id = r1.from_user_id
+          AND r2.status = 0
+        INNER JOIN `user` u
+           ON u.id = r1.to_user_id
+          AND u.deleted_at IS NULL
+        WHERE r1.from_user_id = #{userId}
+          AND r1.status = 0
+    </select>
+
+    <select id="selectFriendUsers" resultMap="UserSummaryResultMap">
+        SELECT u.id, u.username, u.avatar_url
+        FROM `relation` r1
+        INNER JOIN `relation` r2
+           ON r2.from_user_id = r1.to_user_id
+          AND r2.to_user_id = r1.from_user_id
+          AND r2.status = 0
+        INNER JOIN `user` u
+           ON u.id = r1.to_user_id
+          AND u.deleted_at IS NULL
+        WHERE r1.from_user_id = #{userId}
+          AND r1.status = 0
+        ORDER BY r1.id DESC
+        LIMIT #{offset}, #{limit}
+    </select>
+
+    <select id="countMutualFollow" resultType="long">
+        SELECT COUNT(1)
+        FROM `relation` r1
+        INNER JOIN `relation` r2
+           ON r2.from_user_id = r1.to_user_id
+          AND r2.to_user_id = r1.from_user_id
+          AND r2.status = 0
+        WHERE r1.from_user_id = #{leftUserId}
+          AND r1.to_user_id = #{rightUserId}
+          AND r1.status = 0
+    </select>
+</mapper>
